@@ -1,0 +1,6 @@
+# Windows 64-bit wheels only, pinned by hash (Milestone 11). Install with:
+#   .venv\Scripts\python.exe -m pip install --require-hashes -r requirements.txt
+PySide6_Essentials==6.12.0 \
+    --hash=sha256:c9a95102aa23c1f86516a30d5a9be37552d324eee7e567eb7508973f1218cb42
+shiboken6==6.12.0 \
+    --hash=sha256:a1906cb8116869178c64b6bab52623bbc8b4ceed7b30bfc3c9aa0f6e67f6438e

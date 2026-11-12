@@ -1,0 +1,2 @@
+# Windows command files keep Windows line endings: cmd.exe misreads labels and goto in files without them.
+*.cmd text eol=crlf

@@ -1,0 +1,10 @@
+# Python virtual environment (rebuild with: pip install -r requirements.txt)
+.venv/
+__pycache__/
+*.pyc
+
+# Personal flight recordings
+recordings/
+
+# Editor settings
+.vscode/

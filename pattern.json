@@ -1,0 +1,33 @@
+{
+  "_comment": [
+      "Survey pattern: one entry per point, measured from the POI center.",
+      "bearing: degrees clockwise from north. distance and tolerance: meters.",
+      "tolerance: any ping this close to the point marks it done, even one aimed at another point.",
+      "tier: 1 is visited first; tier 2 points wait until every tier 1 point is done or skipped.",
+      "label: short name shown in the window (C center, I inner ring, O outer ring, clockwise from north).",
+      "attempt_distance: the first ping of a deployment marks the point the player was heading for done,",
+      "however far off it landed, as long as it's within this many meters of it. Farther = an extra ping."
+  ],
+  "attempt_distance": 1500,
+  "points": [
+    {"label": "C", "bearing": 0, "distance": 0, "tolerance": 500, "tier": 1},
+    {"label": "I1", "bearing": 0, "distance": 3400, "tolerance": 500, "tier": 1},
+    {"label": "I2", "bearing": 60, "distance": 3400, "tolerance": 500, "tier": 1},
+    {"label": "I3", "bearing": 120, "distance": 3400, "tolerance": 500, "tier": 1},
+    {"label": "I4", "bearing": 180, "distance": 3400, "tolerance": 500, "tier": 1},
+    {"label": "I5", "bearing": 240, "distance": 3400, "tolerance": 500, "tier": 1},
+    {"label": "I6", "bearing": 300, "distance": 3400, "tolerance": 500, "tier": 1},
+    {"label": "O1", "bearing": 0, "distance": 5500, "tolerance": 500, "tier": 2},
+    {"label": "O2", "bearing": 30, "distance": 5500, "tolerance": 500, "tier": 1},
+    {"label": "O3", "bearing": 60, "distance": 5500, "tolerance": 500, "tier": 2},
+    {"label": "O4", "bearing": 90, "distance": 5500, "tolerance": 500, "tier": 1},
+    {"label": "O5", "bearing": 120, "distance": 5500, "tolerance": 500, "tier": 2},
+    {"label": "O6", "bearing": 150, "distance": 5500, "tolerance": 500, "tier": 1},
+    {"label": "O7", "bearing": 180, "distance": 5500, "tolerance": 500, "tier": 2},
+    {"label": "O8", "bearing": 210, "distance": 5500, "tolerance": 500, "tier": 1},
+    {"label": "O9", "bearing": 240, "distance": 5500, "tolerance": 500, "tier": 2},
+    {"label": "O10", "bearing": 270, "distance": 5500, "tolerance": 500, "tier": 1},
+    {"label": "O11", "bearing": 300, "distance": 5500, "tolerance": 500, "tier": 2},
+    {"label": "O12", "bearing": 330, "distance": 5500, "tolerance": 500, "tier": 1}
+  ]
+}
