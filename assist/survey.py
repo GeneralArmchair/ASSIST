@@ -47,6 +47,8 @@ SIGHTED = "sighted"  # range and heading from where the player stood
 TYPED = "typed"      # Manual entry
 
 MAX_RANGE_KM = 20       # a longer deposit range (or POI radius) is rejected as a typing mistake
+KM, M = "km", "m"       # the units a deposit range can be typed in (Remote Mark Deposit's dropdown)
+SMALL_RANGE_M = 10      # a range under this in m is probably km: asks for a second Save
 USUAL_RADIUS_KM = (4.0, 8.0)  # a typed POI radius outside this is unusual (4.3-7.05 km seen so far): warn
 MAX_SIZE = 6            # deposit sizes run from 1 to this
 DENSITIES = ("High", "Medium", "Low")  # a deposit's density, seen at long range (Armchair)
@@ -157,17 +159,33 @@ def _number(text):
     return float(text.strip().replace(",", "."))
 
 
-def parse_range_km(text):
-    """A typed deposit range in km. Raises ValueError with a message for the player."""
+def parse_range_km(text, unit=KM):
+    """A typed deposit range in km or m (unit), returned in km. Raises ValueError with a message for the player."""
+    example = "such as 2.37" if unit == KM else "such as 410"
     try:
-        km = _number(text)
+        value = _number(text)
     except ValueError:
-        raise ValueError("Type the range in km, such as 2.37") from None
+        raise ValueError(f"Type the range in {unit}, {example}") from None
+    km = value if unit == KM else value / 1000
     if km > MAX_RANGE_KM:
-        raise ValueError(f"Range rejected: more than {MAX_RANGE_KM} km")
+        hint = ". Did you mean m?" if unit == KM else ""
+        raise ValueError(f"Range rejected: more than {MAX_RANGE_KM} km{hint}")
     if not km > 0:
-        raise ValueError("Type the range in km, such as 2.37")
+        raise ValueError(f"Type the range in {unit}, {example}")
     return km
+
+
+def doubtful_range(text, unit):
+    """Whether a typed range is probably in the wrong unit and worth a second Save: under 10 in m."""
+    try:
+        return unit == M and _number(text) < SMALL_RANGE_M
+    except ValueError:
+        return False
+
+
+def format_range(km, unit=KM):
+    """A deposit range for the log, in the unit it was typed in."""
+    return f"{km * 1000:g} m" if unit == M else f"{km:.2f} km"
 
 
 def parse_radius_km(text):

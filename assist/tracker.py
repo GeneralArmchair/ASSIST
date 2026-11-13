@@ -17,6 +17,7 @@ Rules:
 - Closed surveys are never resumed. Re-opening one makes it unfinished again.
 - Deposits of an archived survey can be edited from anywhere, straight in its archive file.
 - A sighting of an ore within 400 m of a deposit of the same ore is never saved.
+- Manual Mark Deposit asks before adding the same ore within 150 m of a deposit (the form asks; see near_same_ore).
 """
 
 from dataclasses import dataclass
@@ -24,8 +25,8 @@ from dataclasses import dataclass
 from . import geo
 from .guidance import Guide, format_distance, is_ground_contact, signed_angle
 from .status import GLIDE, HARDPOINTS, HAS_LAT_LONG, IN_SRV, SRV_HANDBRAKE, SRV_TURRET_VIEW, SUPERCRUISE
-from .survey import (AUTO, AUTO_SKIP_BELOW, CLOSED, CUSTOM, CUSTOM_LABEL, DEPOSIT, MANUAL, NO_PING, PING_KIND_NAMES, POI, SIGHTED,
-                     SURVEY_POINT, TYPED, UNFINISHED, Deposit, Ping, Survey)
+from .survey import (AUTO, AUTO_SKIP_BELOW, CLOSED, CUSTOM, CUSTOM_LABEL, DEPOSIT, KM, MANUAL, NO_PING, PING_KIND_NAMES, POI, SIGHTED,
+                     SURVEY_POINT, TYPED, UNFINISHED, Deposit, Ping, Survey, format_range)
 
 KEEP = object()  # update_deposit: leave the density as it is
 LEAVE_DISTANCE = 10_000   # m from the center, horizontally: farther than this = left the POI
@@ -592,7 +593,20 @@ class SurveyTracker:
                 and self.survey.distance(braked.latitude, braked.longitude, status.latitude, status.longitude)
                 <= HANDBRAKE_SETTLE_METERS)
 
-    def mark_deposit(self, sighting, ore, range_km, density=None):
+    def manual_position(self):
+        """(lat, lon, where) to fill Manual Mark Deposit with, taken when it opens; where is "SRV", "ship" and so on.
+        None without a position."""
+        status = self.status
+        if status is None or not status.has_position:
+            return None
+        return status.latitude, status.longitude, status.mode
+
+    def near_same_ore(self, ore, lat, lon):
+        """(deposit, distance) of a deposit of this ore within 150 m of (lat, lon), or None."""
+        nearest = self.survey.nearest_same_ore(ore, lat, lon) if self.survey else None
+        return nearest if nearest and nearest[1] <= DUPLICATE_DEPOSIT else None
+
+    def mark_deposit(self, sighting, ore, range_km, density=None, unit=KM):
         """Save a deposit from a sighting, unless the same ore is already recorded within 400 m of it."""
         survey = self.survey
         if survey is None:
@@ -616,15 +630,17 @@ class SurveyTracker:
                           from_lat=sighting.lat, from_lon=sighting.lon, heading=sighting.heading, range_km=range_km,
                           density=density)
         survey.deposits.append(deposit)
-        message = f"Deposit {deposit.label} saved: {range_km:.2f} km at {sighting.heading:03d}°{_density_note(density)}"
+        message = (f"Deposit {deposit.label} saved: {format_range(range_km, unit)} at {sighting.heading:03d}°"
+                   f"{_density_note(density)}")
         self._save(message)
         return MarkResult(SAVED, message, deposit)
 
-    def add_manual_deposit(self, ore, lat, lon, density=None):
-        """Add a deposit at a typed position. No duplicate check: this is how real twins get recorded."""
+    def add_manual_deposit(self, ore, lat, lon, density=None, measured=False):
+        """Add a deposit at a typed position; measured if it's the player's position, untouched. No duplicate check
+        here: the form asks first, and saying "add" is how real twins get recorded."""
         if not self.can_add_deposit():
             return None
-        deposit, message = _add_typed_deposit(self.survey, ore, self._now(), lat, lon, density)
+        deposit, message = _add_typed_deposit(self.survey, ore, self._now(), lat, lon, density, measured)
         self._save(message)
         return deposit
 
@@ -705,12 +721,14 @@ def _density_note(density):
     return f", density {density}" if density else ""
 
 
-def _add_typed_deposit(survey, ore, time, lat, lon, density=None):
-    """Manual Mark Deposit: (the new deposit, a log message)."""
+def _add_typed_deposit(survey, ore, time, lat, lon, density=None, measured=False):
+    """Manual Mark Deposit: (the new deposit, a log message). Measured means it's where the player was."""
     deposit = Deposit(id=survey.next_deposit_id(), ore=ore, time=time, lat=lat, lon=lon, kind=TYPED, density=density)
+    if measured:
+        deposit.measured_lat, deposit.measured_lon = lat, lon
     survey.deposits.append(deposit)
     return deposit, (f"Deposit {deposit.label} added by Manual Mark Deposit at {lat:.4f}, {lon:.4f}"
-                     f"{_density_note(density)}")
+                     f"{' (measured: your position)' if measured else ''}{_density_note(density)}")
 
 
 def _update_deposit(survey, deposit_id, size, measured_lat, measured_lon, density=KEEP):
@@ -737,11 +755,11 @@ class ArchivedSurvey:
         self.tracker = tracker
         self.survey_id = survey_id
 
-    def add_manual_deposit(self, ore, lat, lon, density=None):
+    def add_manual_deposit(self, ore, lat, lon, density=None, measured=False):
         added = []
 
         def change(survey):
-            deposit, message = _add_typed_deposit(survey, ore, self.tracker._now(), lat, lon, density)
+            deposit, message = _add_typed_deposit(survey, ore, self.tracker._now(), lat, lon, density, measured)
             added.append(deposit)
             return message
         self.tracker._change_archived(self.survey_id, change)

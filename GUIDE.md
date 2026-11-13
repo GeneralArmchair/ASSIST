@@ -82,16 +82,25 @@ a dashed circle on the map showing what a scan there would cover. It's a navigat
 Press Remote Mark Deposit: ASSIST takes your position and heading at that moment. Then:
 1. press the ore's number;
 2. press H, M or L for the density (optional);
-3. type the range shown in the game, such as `1.51 km` or `41 m`, and press Enter.
+3. type the range shown in the game, just the number, such as `1.51`, and press Enter.
 
-ASSIST works out the deposit's estimated position. The same ore within 150 m of an existing deposit is treated as
-that deposit, and its position is averaged. Between 150 and 400 m you get a warning, since real deposits are always
-more than 400 m apart.
+The range is in km unless you change the dropdown after the box to m, for when the game shows metres (under 1 km).
+ASSIST remembers the unit you last picked. A range over 20 km is rejected, and one under 10 m asks you to press
+Save again, since either is probably the wrong unit.
+
+ASSIST works out the deposit's estimated position. A sighting of the same ore within 400 m of an existing deposit
+is not saved: within 150 m it's that deposit, and between 150 and 400 m it's probably that deposit, badly estimated.
+The form says which and stays open, so a mistyped range can be corrected. Nothing is ever averaged.
 
 **Later**, select the deposit and press **Navigate to selected** to be guided to it. Once there, **Update size /
 location** records its size (1-6) and the position read off the HUD, which then counts as measured. Right-click a
-deposit for the same two actions. **Manual Mark Deposit** adds a deposit by typed latitude and longitude, with no
-duplicate check, for deposits close together.
+deposit for the same two actions.
+
+**Manual Mark Deposit** adds a deposit by latitude and longitude. It opens filled in with your position at that
+moment, and a line on the form says so. Save it unchanged and that position counts as measured; type over it and
+it's an estimate. If the position is within 150 m of a deposit of the same ore, ASSIST asks whether to update that
+deposit instead (Enter does): its Update size / location form opens with the position filled in.
+**Add new deposit** records a second deposit anyway, for real twins close together.
 
 ## Maps and past surveys
 

@@ -385,7 +385,8 @@ class SurveyPanel(QWidget):
             sighting = self.tracker.capture_sighting()
             if sighting is None:
                 return
-            self.mark_form = MarkDepositDialog(self.tracker, sighting, target_ores(self.settings), self)
+            self.mark_form = MarkDepositDialog(self.tracker, sighting, target_ores(self.settings), self,
+                                               settings=self.settings)
             self.mark_form.finished.connect(self._mark_form_closed)
             self.mark_form.open()
         # Otherwise a form is already open: bring it back rather than silently retaking the sighting.
@@ -430,8 +431,16 @@ class SurveyPanel(QWidget):
             self.map_window.status_changed()
 
     def manual_entry(self):
-        if self.tracker.can_add_deposit():
-            ManualEntryDialog(self.tracker, target_ores(self.settings), self).exec()
+        """Manual Mark Deposit, filled in with the player's position now. It may hand over to a nearby deposit's
+        Update size / location form instead."""
+        if not self.tracker.can_add_deposit():
+            return
+        form = ManualEntryDialog(self.tracker, target_ores(self.settings), self,
+                                 where=self.tracker.manual_position(), check_near=True)
+        form.exec()
+        if form.update_instead:
+            deposit, lat, lon, density = form.update_instead
+            self._edit(deposit.id, measured=(lat, lon), density=density)
 
     def deposit_menu(self, item):
         """The right-click menu for a row of the Deposits table, or None off the rows.
@@ -470,11 +479,11 @@ class SurveyPanel(QWidget):
     def _fly_to(self, deposit_id):
         self.tracker.fly_to_deposit(deposit_id)
 
-    def _edit(self, deposit_id):
+    def _edit(self, deposit_id, **filled):
         survey = self.tracker.survey
         deposit = survey.deposit(deposit_id) if survey else None
         if deposit:  # gone if it was deleted, or the survey closed, while the menu was open
-            EditDepositDialog(self.tracker, deposit, self).exec()
+            EditDepositDialog(self.tracker, deposit, self, **filled).exec()
 
     def _delete_deposit(self):
         deposit = self._selected_deposit()

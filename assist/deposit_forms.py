@@ -6,10 +6,12 @@ Target ores and their sort order are kept in QSettings, so they carry over betwe
 
 from PySide6.QtCore import QEvent, Qt
 from PySide6.QtWidgets import (QButtonGroup, QComboBox, QDialog, QDialogButtonBox, QFormLayout, QGroupBox, QHBoxLayout,
-                               QLabel, QLineEdit, QListWidget, QListWidgetItem, QRadioButton, QVBoxLayout)
+                               QLabel, QLineEdit, QListWidget, QListWidgetItem, QMessageBox, QRadioButton, QVBoxLayout)
 
 from .ores import ALPHABETICAL, BY_PRICE, ORES, sorted_ores
-from .survey import DENSITIES, MAX_RANGE_KM, MAX_SIZE, USUAL_RADIUS_KM, parse_lat_lon, parse_radius_km, parse_range_km, unusual_radius
+from .guidance import format_distance
+from .survey import (DENSITIES, KM, M, MAX_RANGE_KM, MAX_SIZE, SMALL_RANGE_M, USUAL_RADIUS_KM, doubtful_range, parse_lat_lon,
+                     parse_radius_km, parse_range_km, unusual_radius)
 from .tracker import SAVED
 
 WARNING_STYLE = "background-color: #e69a28; color: black; padding: 4px;"
@@ -28,6 +30,35 @@ def target_ores(settings):
 def save_target_ores(settings, ores, order):
     settings.setValue("target_ores", list(ores))
     settings.setValue("target_ores_order", order)
+
+
+def range_unit(settings):
+    """Remote Mark Deposit's range unit, km until the player picks m."""
+    unit = settings.value("range_unit", KM, type=str) if settings is not None else KM
+    return unit if unit in (KM, M) else KM
+
+
+class PrefilledPosition:
+    """A latitude and longitude field pair that may start filled in with a position from the game.
+
+    The fields show 4 decimals, like the HUD. While the text still matches what was filled in, value() gives the
+    full-precision position and says it's untouched; typed over, it's whatever was typed.
+    """
+
+    def __init__(self, lat=None, lon=None):
+        self.filled = (lat, lon) if lat is not None and lon is not None else None
+        self.texts = (f"{lat:.4f}", f"{lon:.4f}") if self.filled else ("", "")
+        self.lat = QLineEdit(self.texts[0])
+        self.lon = QLineEdit(self.texts[1])
+
+    def untouched(self):
+        return self.filled is not None and (self.lat.text(), self.lon.text()) == self.texts
+
+    def value(self):
+        """(lat, lon, untouched). Raises ValueError with a message for the player."""
+        if self.untouched():
+            return (*self.filled, True)
+        return (*parse_lat_lon(self.lat.text(), self.lon.text()), False)
 
 
 class TargetOresDialog(QDialog):
@@ -194,10 +225,12 @@ class _DepositForm(QDialog):
 class MarkDepositDialog(_DepositForm):
     """Ore and range for a sighting. Stays open if nothing was saved, showing why."""
 
-    def __init__(self, tracker, sighting, ores, parent=None):
+    def __init__(self, tracker, sighting, ores, parent=None, *, settings=None):
         super().__init__("Remote Mark Deposit", parent)
         self.tracker = tracker
         self.sighting = sighting
+        self.settings = settings
+        self.warned = None  # (text, unit) that has been asked about
         self.fields.addWidget(QLabel(f"Heading {sighting.heading:03d}° from {sighting.lat:.4f}, {sighting.lon:.4f}"))
         for warning in sighting.warnings:
             label = QLabel(warning)
@@ -209,12 +242,20 @@ class MarkDepositDialog(_DepositForm):
         self.density = DensityRadios()
         self.fields.addWidget(self.density)
         self.range = QLineEdit()
-        self.range.setPlaceholderText(f"up to {MAX_RANGE_KM}")
         self.density.watch(self.range)
         for radio in self.radios.group.buttons():
             self.density.watch(radio)
+        # The unit comes after the box, so Enter in the box saves before the dropdown is ever reached.
+        self.unit = QComboBox()
+        self.unit.addItems([KM, M])
+        self.unit.setCurrentText(range_unit(settings))
+        self._unit_changed(self.unit.currentText(), remember=False)
+        self.unit.currentTextChanged.connect(self._unit_changed)
+        range_row = QHBoxLayout()
+        range_row.addWidget(self.range)
+        range_row.addWidget(self.unit)
         form = QFormLayout()
-        form.addRow("Range (km):", self.range)
+        form.addRow("Range:", range_row)
         self.fields.addLayout(form)
         hint = QLabel("Press H, M or L for the density, then type the range.")
         hint.setEnabled(False)  # greyed: a hint, not a field
@@ -225,17 +266,27 @@ class MarkDepositDialog(_DepositForm):
         else:
             self.range.setFocus()
 
+    def _unit_changed(self, unit, remember=True):
+        self.range.setPlaceholderText(f"up to {MAX_RANGE_KM}" if unit == KM else f"up to {MAX_RANGE_KM * 1000}")
+        if remember and self.settings is not None:
+            self.settings.setValue("range_unit", unit)
+
     def save(self):
         ore = self.radios.ore()
         if ore is None:
             self.show_message("Pick an ore")
             return
+        text, unit = self.range.text(), self.unit.currentText()
         try:
-            range_km = parse_range_km(self.range.text())
+            range_km = parse_range_km(text, unit)
         except ValueError as error:
             self.show_message(str(error))
             return
-        result = self.tracker.mark_deposit(self.sighting, ore, range_km, self.density.density())
+        if doubtful_range(text, unit) and self.warned != (text, unit):
+            self.warned = (text, unit)
+            self.show_message(f"Under {SMALL_RANGE_M} m: did you mean km? Save again to keep {text.strip()} m.")
+            return
+        result = self.tracker.mark_deposit(self.sighting, ore, range_km, self.density.density(), unit)
         if result.outcome == SAVED:
             self.accept()
         else:
@@ -243,23 +294,42 @@ class MarkDepositDialog(_DepositForm):
 
 
 class ManualEntryDialog(_DepositForm):
-    """Ore and typed position, with no duplicate check: for real twins close together."""
+    """Ore and position: for real twins close together, or a deposit marked standing on it.
 
-    def __init__(self, tracker, ores, parent=None):
+    In the main window (where given) the position starts as the player's, taken when the form opened, and saved
+    untouched it counts as measured. check_near: before adding the same ore within 150 m of a deposit, ask whether
+    to update that deposit instead; if so the form closes with update_instead set to (deposit, lat, lon, density)
+    for the caller to open its Update size / location form.
+    """
+
+    ADD, UPDATE, BACK = "add", "update", "back"
+
+    def __init__(self, tracker, ores, parent=None, *, where=None, check_near=False):
         super().__init__("Manual Mark Deposit", parent)
         self.tracker = tracker
+        self.check_near = check_near
+        self.update_instead = None
         self.radios = OreRadios(ores)
         self.fields.addWidget(self.radios)
         self.density = DensityRadios()
         self.fields.addWidget(self.density)
-        self.lat = QLineEdit()
-        self.lon = QLineEdit()
+        lat, lon, mode = where or (None, None, None)
+        self.position = PrefilledPosition(lat, lon)
+        self.lat, self.lon = self.position.lat, self.position.lon
         for widget in (self.lat, self.lon, *self.radios.group.buttons()):
             self.density.watch(widget)
         form = QFormLayout()
         form.addRow("Latitude:", self.lat)
         form.addRow("Longitude:", self.lon)
         self.fields.addLayout(form)
+        self.source = None
+        if check_near:  # the main window's form: say where the numbers came from
+            text = (f"Filled in with your position ({mode}) when this form opened. Type over it to change it."
+                    if self.position.filled else "No position from the game: type the latitude and longitude.")
+            self.source = QLabel(text)
+            self.source.setWordWrap(True)
+            self.source.setEnabled(False)  # greyed: a hint, not a field
+            self.fields.addWidget(self.source)
         self.radios.next_field = self.lat
 
     def save(self):
@@ -268,18 +338,42 @@ class ManualEntryDialog(_DepositForm):
             self.show_message("Pick an ore")
             return
         try:
-            lat, lon = parse_lat_lon(self.lat.text(), self.lon.text())
+            lat, lon, untouched = self.position.value()
         except ValueError as error:
             self.show_message(str(error))
             return
-        self.tracker.add_manual_deposit(ore, lat, lon, self.density.density())
+        near = self.tracker.near_same_ore(ore, lat, lon) if self.check_near else None
+        if near:
+            choice = self.ask_near(*near)
+            if choice == self.BACK:
+                return
+            if choice == self.UPDATE:
+                self.update_instead = (near[0], lat, lon, self.density.density())
+                self.accept()
+                return
+        self.tracker.add_manual_deposit(ore, lat, lon, self.density.density(), measured=untouched)
         self.accept()
+
+    def ask_near(self, deposit, distance):
+        """Update the nearby deposit, add a new one anyway, or go back: UPDATE, ADD or BACK. Enter updates."""
+        number = f"D{deposit.id}"
+        box = QMessageBox(QMessageBox.Icon.Question, "Manual Mark Deposit",
+                          f"{deposit.label} is {format_distance(distance)} away. Update {number} instead?", parent=self)
+        update = box.addButton(f"Update {number}", QMessageBox.ButtonRole.AcceptRole)
+        add = box.addButton("Add new deposit", QMessageBox.ButtonRole.DestructiveRole)
+        back = box.addButton("Back", QMessageBox.ButtonRole.RejectRole)
+        box.setDefaultButton(update)
+        box.setEscapeButton(back)
+        box.exec()
+        return {update: self.UPDATE, add: self.ADD}.get(box.clickedButton(), self.BACK)
 
 
 class EditDepositDialog(_DepositForm):
     """Size and measured position, read off the HUD on a visit. The estimate stays as it was."""
 
-    def __init__(self, tracker, deposit, parent=None):
+    def __init__(self, tracker, deposit, parent=None, *, measured=None, density=None):
+        """measured (lat, lon) and density come from Manual Mark Deposit's "Update instead": filled in, not saved yet.
+        The density only fills a blank one."""
         super().__init__(f"Deposit {deposit.label}", parent)
         self.tracker = tracker
         self.deposit_id = deposit.id
@@ -292,9 +386,16 @@ class EditDepositDialog(_DepositForm):
         self.density.addItem("(blank)", None)
         for value in DENSITIES:
             self.density.addItem(value, value)
-        self.density.setCurrentIndex(max(0, self.density.findData(deposit.density)))
-        self.lat = QLineEdit("" if deposit.measured_lat is None else str(deposit.measured_lat))
-        self.lon = QLineEdit("" if deposit.measured_lon is None else str(deposit.measured_lon))
+        self.density.setCurrentIndex(max(0, self.density.findData(deposit.density or density)))
+        self.position = PrefilledPosition(*measured) if measured is not None else None
+        if self.position:
+            self.lat, self.lon = self.position.lat, self.position.lon
+            note = QLabel("Measured position filled in from Manual Mark Deposit. Save to keep it.")
+            note.setWordWrap(True)
+            self.fields.addWidget(note)
+        else:
+            self.lat = QLineEdit("" if deposit.measured_lat is None else str(deposit.measured_lat))
+            self.lon = QLineEdit("" if deposit.measured_lon is None else str(deposit.measured_lon))
         form = QFormLayout()
         form.addRow("Estimated position:", QLabel(f"{deposit.lat:.4f}, {deposit.lon:.4f}"))
         form.addRow(f"Size (1-{MAX_SIZE}):", self.size)
@@ -306,7 +407,9 @@ class EditDepositDialog(_DepositForm):
     def save(self):
         lat_text, lon_text = self.lat.text().strip(), self.lon.text().strip()
         lat = lon = None
-        if lat_text or lon_text:  # both blank clears the measured position
+        if self.position and self.position.untouched():
+            lat, lon, _ = self.position.value()  # the full-precision position, not the 4 decimals shown
+        elif lat_text or lon_text:  # both blank clears the measured position
             try:
                 lat, lon = parse_lat_lon(lat_text, lon_text)
             except ValueError as error:

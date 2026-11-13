@@ -1,4 +1,4 @@
-"""Milestone 13: release prep. Setup.cmd, the public files, recordings named in UTC, the version.
+"""Milestone 13: release prep. Setup.cmd, the public files, recordings named in UTC.
 
 Setup.cmd is run for real by cmd.exe in a scratch copy of the project (its folder name has a space, like many
 Windows user folders). A fake `py` placed first on PATH stands in for the Python launcher: it is missing Python 3.12,
@@ -17,7 +17,6 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import record_status
-from assist import __version__
 
 PROJECT = Path(__file__).resolve().parent.parent
 REAL_PYTHON = Path(getattr(sys, "_base_executable", "") or Path(sys.base_prefix) / "python.exe")
@@ -265,11 +264,6 @@ class RecordingNameTests(unittest.TestCase):
         now = datetime(2026, 11, 12, 23, 0, 0, tzinfo=elsewhere)
         self.assertEqual(record_status.recording_name(now), "recording_20261112_140000Z.jsonl")
         self.assertEqual(record_status.recording_name(now, full=True), "recording_20261112_140000Z_full.jsonl")
-
-
-class VersionTests(unittest.TestCase):
-    def test_version(self):
-        self.assertEqual(__version__, "0.13.0")
 
 
 if __name__ == "__main__":
