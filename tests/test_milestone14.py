@@ -15,7 +15,7 @@ from PySide6.QtCore import QSettings, Qt, QTimer
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QFormLayout, QLabel
 
-from assist import __version__, survey_panel, surveys_dialog
+from assist import survey_panel, surveys_dialog
 from assist.deposit_forms import EditDepositDialog, ManualEntryDialog, MarkDepositDialog, range_unit, save_target_ores
 from assist.ores import ALPHABETICAL
 from assist.survey import KM, M, TYPED, doubtful_range, format_range, parse_range_km
@@ -463,11 +463,6 @@ class GuideTests(unittest.TestCase):
                      "filled in with your position", "counts as measured", "within 150 m of a deposit of the same ore",
                      "Add new deposit", "Nothing is ever averaged"):
             self.assertIn(text, self.guide)
-
-
-class VersionTests(unittest.TestCase):
-    def test_version(self):
-        self.assertEqual(__version__, "0.14.0")
 
 
 if __name__ == "__main__":

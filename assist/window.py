@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (QCheckBox, QFormLayout, QGroupBox, QLabel, QMainW
 
 from .hotkeys import HotkeyDialog, HotkeyManager
 from .overlay import OverlayDialog, OverlayWindow
+from .preferences import DEFAULTS, PreferencesDialog
 from .status import FLAG_NAMES, FLAGS2_NAMES, set_bits
 from .survey_panel import SurveyPanel
 
@@ -101,6 +102,9 @@ class StatusWindow(QMainWindow):
         hotkeys_button = QPushButton("Hotkeys...")
         hotkeys_button.clicked.connect(self._edit_hotkeys)
         self.statusBar().addPermanentWidget(hotkeys_button)
+        preferences_button = QPushButton("Preferences...")
+        preferences_button.clicked.connect(self._edit_preferences)
+        self.statusBar().addPermanentWidget(preferences_button)
 
         source.status_changed.connect(self.show_status)
         source.system_changed.connect(self.show_system)
@@ -114,7 +118,7 @@ class StatusWindow(QMainWindow):
             self.values["Progress"].setText("live")
         for problem in self.hotkeys.apply():
             self.add_log(f"Hotkey problem: {problem}")
-        tracker.detect_scans = self.settings.value("auto_scan_detection", True, type=bool)
+        tracker.detect_scans = self.settings.value("auto_scan_detection", DEFAULTS["auto_scan_detection"], type=bool)
         self.add_log(self._detection_text())
 
     def _detection_text(self):
@@ -123,11 +127,24 @@ class StatusWindow(QMainWindow):
         return "Automatic scan detection is off: only Manual ping marks a scan"
 
     def _edit_hotkeys(self):
-        """The Hotkeys dialog, which also holds the automatic scan detection checkbox (Milestone 9)."""
-        dialog = HotkeyDialog(self.hotkeys, self, scan_detection=self.tracker.detect_scans)
-        if dialog.exec() and dialog.scan_detection != self.tracker.detect_scans:
-            self.tracker.detect_scans = dialog.scan_detection
-            self.settings.setValue("auto_scan_detection", dialog.scan_detection)
+        HotkeyDialog(self.hotkeys, self).exec()
+
+    def preferences(self):
+        """The settings Preferences... shows, as they are now."""
+        return {"auto_scan_detection": self.tracker.detect_scans}
+
+    def _edit_preferences(self):
+        manual_ping_bound = not self.hotkeys.binding("manual_ping").isEmpty()
+        dialog = PreferencesDialog(self.preferences(), self, manual_ping_bound=manual_ping_bound)
+        if dialog.exec():
+            self.apply_preferences(dialog.values)
+
+    def apply_preferences(self, values):
+        """Store and use the settings chosen in Preferences...; only changed ones are written and logged."""
+        detect = values["auto_scan_detection"]
+        if detect != self.tracker.detect_scans:
+            self.tracker.detect_scans = detect
+            self.settings.setValue("auto_scan_detection", detect)
             self.add_log(self._detection_text())
 
     def closeEvent(self, event):

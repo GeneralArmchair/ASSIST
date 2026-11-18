@@ -1,7 +1,8 @@
 # ASSIST player guide
 
 How to survey a planetary mining POI with ASSIST, from setting the game up to sharing the results.
-To install ASSIST, see [README.md](README.md#setting-it-up).
+To install ASSIST, see [README.md](README.md#setting-it-up). What changed in each version is in
+[CHANGELOG.md](CHANGELOG.md).
 
 ## Before the first flight
 
@@ -32,8 +33,11 @@ is the window in front.
 
 Every hotkey action also has a button in the main window.
 
-**Scan detection.** The checkbox at the top of Hotkeys..., on by default, logs the first scan of each SRV
-deployment by itself. The game reports the first trigger pull of a deployment, so it works as long as the scanner is
+**Preferences...**, next to Hotkeys... in the status bar, holds ASSIST's settings, sorted into categories listed on
+the left.
+
+**Scan detection.** "Detect the first scan of each SRV deployment automatically", under Preferences... → Survey
+Settings, is on by default and logs the first scan of each SRV deployment by itself. The game reports the first trigger pull of a deployment, so it works as long as the scanner is
 the first tool you fire. Turn it off if you'd rather log every scan yourself with Manual ping.
 
 **Target ores.** Click **Define Target Ores** and tick the ores you're looking for. They're the choices offered when

@@ -6,7 +6,7 @@ ship there with an on-screen overlay, records pings and deposits, and draws a ma
 
 Windows only (64-bit). Python 3.12 and PySide6 (Qt). This is a 0.x pre-release for field testing.
 
-How to use it in the game: **[GUIDE.md](GUIDE.md)**.
+How to use it in the game: **[GUIDE.md](GUIDE.md)**. What changed in each version: [CHANGELOG.md](CHANGELOG.md).
 
 ## Setting it up
 

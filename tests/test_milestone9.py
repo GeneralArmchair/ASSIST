@@ -5,17 +5,15 @@ import json
 import os
 import tempfile
 import unittest
-from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtCore import QRect, QSettings, QStandardPaths
-from PySide6.QtGui import QColor, QImage, QKeySequence, QPainter
+from PySide6.QtCore import QRect, QStandardPaths
+from PySide6.QtGui import QColor, QImage, QPainter
 from PySide6.QtWidgets import QApplication
 
 import main
 from make_test_recording import CENTER
-from assist.hotkeys import HotkeyDialog, HotkeyManager
 from assist.map_view import draw_map, image_name
 from assist.paths import assist_folder, documents_folder, recordings_folder
 from assist.survey import AUTO, CLOSED, MANUAL, NO_PING, SurveyStore, file_name
@@ -66,45 +64,6 @@ class DetectionOffTests(unittest.TestCase):
 
     def test_on_by_default(self):
         self.assertTrue(type(self.tracker)(self.store, self.tracker.pattern).detect_scans)
-
-
-class DetectionCheckboxTests(unittest.TestCase):
-    def setUp(self):
-        folder = tempfile.TemporaryDirectory()
-        self.addCleanup(folder.cleanup)
-        self.settings = QSettings(str(Path(folder.name) / "settings.ini"), QSettings.Format.IniFormat)
-        self.manager = HotkeyManager([("manual_ping", "Manual ping", lambda: None)], self.settings)
-        self.addCleanup(app.removeNativeEventFilter, self.manager)
-
-    def dialog(self, on):
-        dialog = HotkeyDialog(self.manager, scan_detection=on)
-        self.addCleanup(dialog.close)
-        dialog.show()
-        return dialog
-
-    def test_note_only_when_off_and_unbound(self):
-        dialog = self.dialog(True)
-        self.assertTrue(dialog.detection_box.isChecked())
-        self.assertFalse(dialog.no_key_note.isVisible())
-        dialog.detection_box.setChecked(False)
-        self.assertTrue(dialog.no_key_note.isVisible())
-        dialog.edits["manual_ping"].setKeySequence(QKeySequence("F9"))
-        self.assertFalse(dialog.no_key_note.isVisible())
-
-    def test_ok_returns_the_choice_cancel_doesnt(self):
-        dialog = self.dialog(True)
-        dialog.detection_box.setChecked(False)
-        dialog.reject()
-        self.assertTrue(dialog.scan_detection)
-        dialog = self.dialog(True)
-        dialog.detection_box.setChecked(False)
-        dialog.accept()
-        self.assertFalse(dialog.scan_detection)
-
-    def test_without_the_option(self):
-        dialog = HotkeyDialog(self.manager)
-        self.addCleanup(dialog.close)
-        self.assertIsNone(dialog.detection_box)
 
 
 class ScanCircleTests(CustomCase):

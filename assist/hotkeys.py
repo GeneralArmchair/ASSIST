@@ -10,7 +10,7 @@ from ctypes import wintypes
 
 from PySide6.QtCore import QAbstractNativeEventFilter, QCoreApplication, Qt, QTimer
 from PySide6.QtGui import QKeySequence
-from PySide6.QtWidgets import (QCheckBox, QDialog, QDialogButtonBox, QFormLayout, QKeySequenceEdit, QLabel,
+from PySide6.QtWidgets import (QDialog, QDialogButtonBox, QFormLayout, QKeySequenceEdit, QLabel,
                                QMessageBox, QVBoxLayout)
 
 WM_HOTKEY = 0x0312
@@ -160,29 +160,16 @@ class HotkeyManager(QAbstractNativeEventFilter):
         return False, 0
 
 
-SCAN_DETECTION_TEXT = "Detect the first scan of each SRV deployment automatically"
-NO_MANUAL_PING_KEY = "Manual ping has no hotkey; set one below."
-
-
 class HotkeyDialog(QDialog):
-    """scan_detection: whether automatic scan detection is on, for the checkbox at the top (Milestone 9); None for none.
-    After OK, self.scan_detection holds the checkbox's state."""
+    """Rebinding the hotkeys. (The automatic scan detection checkbox that was at the top moved to Preferences... in
+    Milestone 15.)"""
 
-    def __init__(self, manager, parent=None, scan_detection=None):
+    def __init__(self, manager, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Hotkeys")
         self.manager = manager
         self.edits = {}
-        self.scan_detection = scan_detection
-        self.detection_box = self.no_key_note = None
         layout = QVBoxLayout(self)
-        if scan_detection is not None:
-            self.detection_box = QCheckBox(SCAN_DETECTION_TEXT)
-            self.detection_box.setChecked(scan_detection)
-            self.detection_box.setToolTip("Off: scans are marked only with Manual ping (the hotkey or the button)")
-            self.no_key_note = QLabel(NO_MANUAL_PING_KEY)
-            layout.addWidget(self.detection_box)
-            layout.addWidget(self.no_key_note)
         form = QFormLayout()
         for name, label, _ in manager.actions:
             edit = QKeySequenceEdit(manager.binding(name))
@@ -199,17 +186,7 @@ class HotkeyDialog(QDialog):
         layout.addLayout(form)
         layout.addWidget(note)
         layout.addWidget(buttons)
-        if self.detection_box:
-            self.detection_box.toggled.connect(self._update_note)
-            if "manual_ping" in self.edits:
-                self.edits["manual_ping"].keySequenceChanged.connect(self._update_note)
-            self._update_note()
         manager.release()  # so the boxes can capture keys that are currently bound
-
-    def _update_note(self, *_):
-        edit = self.edits.get("manual_ping")
-        unbound = edit is not None and edit.keySequence().isEmpty()
-        self.no_key_note.setVisible(not self.detection_box.isChecked() and unbound)
 
     def accept(self):
         for name, edit in self.edits.items():
@@ -219,8 +196,6 @@ class HotkeyDialog(QDialog):
             QMessageBox.warning(self, "Hotkeys", "\n".join(problems))
             self.manager.release()
             return  # stay open so the player can fix them
-        if self.detection_box:
-            self.scan_detection = self.detection_box.isChecked()
         super().accept()
 
     def reject(self):
